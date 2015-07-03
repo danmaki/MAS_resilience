@@ -23,7 +23,6 @@ class Agent:    #エージェントクラス
         if self.SC<0:
             self.SC = 0
 
-
 # 関数定義
 def savefigaspdf(name):
     date = datetime.date.today()

@@ -29,31 +29,21 @@ class Agent:    #エージェントクラス
         }
         return agentData
 
-class CountData:  #エージェント数のカウント
-    def __init__(self,agentData):
+class Count:  #エージェント数のカウント
+    def __init__(self,agentData,timeStep):
+        self.countData = {'TimeStep':timeStep,\
+        'activeAgent':{'non-strikenHuman':0,'strikenHuman':0},\
+        'totalCapital':{'non-strikenHuman':0,'strikenHuman':0}\
+        }
         for key in agentData.keys():
-            print key,
-        self.Type = Type
-        self.SC = SC
-        self.ST = ST
-    def count(self):
-        countData = {}
-        agent = self.agentData
-        for key in agent.keys():    #活動しているエージェント
-            if agent.SC>0:
-                countData[key] = agentData[key]
-                if self.Type == 'non-strikenHuman':
-                    countData['non-strikenHuman'] += 1
-                    countData['all'] += 1
-                    countData[0] += self.SC
-                    countData[2] += self.SC
-                elif self.Type == 'strikenHuman':
-                    countData['strikenHuman'] += 1
-                    countData['all'] += 1
-                    countData[0] += self.SC
-                    countData[2] += self.SC
-        # activeCount = len(activeAgent)
-        return countData
+            agentType = agentData[key]['agentType']
+            agentCapital = agentData[key]['SocialCapital']
+            self.countData['activeAgent'][agentType] += 1
+            self.countData['totalCapital'][agentType] += agentCapital
+        self.timeStep = timeStep
+    def getData(self,data):
+        data = self.countData
+        return data
 
 class SeismicLoss:
     def __init__(self,agent,loss):
@@ -65,7 +55,6 @@ class SeismicLoss:
 class Transaction:
     def __init__(self,transactionAgents):
         self.transactionAgents = transactionAgents
-
 
 # 関数定義
 def savefigaspdf(name):
@@ -81,73 +70,77 @@ def savefigaspdf(name):
 if __name__ == "__main__":
     """エージェント定義"""
     AgentNumber = {\
-    "non-strikenHuman":100#,\
-    # "strikenHuman":20\
-    }   #エージェント数
-    SocialConsumption = 10   #ステップごとのSC消費量
+    "Human":100
+    }
     TimeStep = 1000
     agentData = {}
     agentCount = 0
     for key in AgentNumber:    #クラス生成
-        if key == 'non-strikenHuman':
+        if key == 'Human':
             initialSC = 200
-            ST = random.normalvariate(10,0.5)
-        else:
-            initialSC = 100
-            ST = random.normalvariate(5,0.5)
-        for num in range(AgentNumber[key]):
+            ST = 1
+        if key == 'Enterprise':
+            initialSC = 2000
+            ST = 10
+        for n in range(AgentNumber[key]):
             agentCount += 1
             agentn = Agent(agentCount,key,initialSC,ST)
-            agentData = agentn.agentData(num,num,agentData)
-
+            agentData = agentn.agentData(random.random(),random.random(),agentData)
     """エージェントシミュレーション"""
-    ActiveAgentNumber = []
-    totalSocialCapital = []
-    transactionAgents = len(agentData)
+    countData = []
     for k in range(TimeStep):
-        # totalCapital = 0
+        if k == 100:
+            for key in agentData.keys():
+                if agentData[key]['locationX'] and agentData[key]['locationY'] > 0.5:
+                    agentData[key]['SocialCapital'] -= 100
         activeAgent = {}
-        totalCapital = {}
-        activeCount = {}
         """活動エージェントのみ抽出"""
-        countdata = CountData(agentData)
-        countData = countdata.count
         for key in agentData.keys():    #活動しているエージェント
+            """エージェントタイプの判別・変更"""
+            if agentData[key]["SocialCapital"]>180: #非被災条件 SC > 0.8*initialSC
+                agentData[key]['agentType'] = 'non-strikenHuman'
+            else:
+                agentData[key]['agentType'] = 'strikenHuman'
             if agentData[key]["SocialCapital"]>0:
-                activeAgent[key] = agentData[key]
-                # totalCapital += activeAgent[key]['SocialCapital']
-                if activeAgent[key]['agentType'] == 'non-strikenHuman':
-                    activeCount['non-strikenHuman'] += 1
-                    activeCount[2] += 1
-                    totalCapital[0] += activeAgent[key]['SocialCapital']
-                    totalCapital[2] += activeAgent[key]['SocialCapital']
-                else:
-                    activeCount[1] += 1
-                    activeCount[2] += 1
-                    totalCapital[1] += activeAgent[key]['SocialCapital']
-                    totalCapital[2] += activeAgent[key]['SocialCapital']
-        # activeCount = len(activeAgent)
-
+                    activeAgent[key] = agentData[key]
+        countDatan = Count(activeAgent,k)
+        countData.append(countDatan.getData(countData))
         """
         取引ルール
-        　
         """
         for key in activeAgent.keys():
+            if activeAgent[key]['agentType'] == 'non-strikenHuman':
+                sc = random.uniform(1.5,2.5)   #ステップごとのSC消費量
+            elif activeAgent[key]['agentType'] == 'strikenHuman':
+                sc = random.uniform(0.5,1.5)   #ステップごとのSC消費量
             transactionPartner = random.choice(activeAgent.items())
-            st = -activeAgent[key]['SocialTransaction']\
+            st = activeAgent[key]['SocialTransaction']\
             + activeAgent[transactionPartner[0]]['SocialTransaction']
-            activeAgent[key]['SocialCapital'] += st #- SocialConsumption
-            activeAgent[transactionPartner[0]]['SocialCapital'] += st #- SocialConsumption
-        ActiveAgentNumber.append(activeCount)
-        totalSocialCapital.append(totalCapital)
+            activeAgent[key]['SocialCapital'] += st - sc
+            activeAgent[transactionPartner[0]]['SocialCapital'] += st - sc
 
-"""結果表示"""
+    """結果計算"""
+    figX = []
+    figYTotalSC = []
+    figYActiveagent = []
+    for key in range(len(countData)):
+        figX.append(countData[key]['TimeStep'])
+        figYActiveagent.append([\
+        countData[key]['activeAgent']['non-strikenHuman'],\
+        countData[key]['activeAgent']['strikenHuman'],\
+        sum(countData[key]['activeAgent'].values())\
+        ])
+        figYTotalSC.append([\
+        countData[key]['totalCapital']['non-strikenHuman'],\
+        countData[key]['totalCapital']['strikenHuman'],\
+        sum(countData[key]['totalCapital'].values())\
+        ])
 
 """活動エージェント数の推移"""
 plt.figure("The number of active agents",figsize=(16,9))
 plt.xlabel("Step")
 plt.ylabel("The number of active agents")
-plt.plot(range(TimeStep),ActiveAgentNumber)
+plt.plot(figX,figYActiveagent)
 plt.legend(('non-strikenHuman','strikenHuman','total'))
 savefigaspdf("TheNumberOfActiveAgents")
 
@@ -155,7 +148,7 @@ savefigaspdf("TheNumberOfActiveAgents")
 plt.figure("Total amount of social capital",figsize=(16,9))
 plt.xlabel("Step")
 plt.ylabel("Total amount of social capital")
-plt.plot(range(TimeStep),totalSocialCapital)
+plt.plot(figX,figYTotalSC)
 plt.legend(('non-strikenHuman','strikenHuman','total'))
 savefigaspdf("TotalAmountOfSocialCapital")
 
